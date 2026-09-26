@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>La Gran Hemeroteca De Discos</title>
+<style>
+  :root{
+    --bg:#faf7f2; --card:#ffffff; --ink:#2b2420; --muted:#8a7f74;
+    --accent:#b5482a; --accent-dark:#8f3820; --line:#e7dfd5; --ok:#3f7a4f;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    padding-bottom:60px;
+  }
+  header{
+    background:var(--accent); color:#fff; padding:18px 16px;
+    text-align:center; font-size:1.25rem; font-weight:700;
+    box-shadow:0 2px 6px rgba(0,0,0,.15);
+  }
+  header small{display:block; font-weight:400; font-size:.75rem; opacity:.85; margin-top:2px;}
+  main{max-width:520px; margin:0 auto; padding:14px;}
+  .card{
+    background:var(--card); border:1px solid var(--line); border-radius:14px;
+    padding:16px; margin-bottom:16px;
+  }
+  .card h2{margin:0 0 12px; font-size:1rem; color:var(--accent-dark);}
+  label{display:block; font-size:.8rem; color:var(--muted); margin:10px 0 4px;}
+  input, select, textarea{
+    width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:9px;
+    font-size:1rem; background:#fff; color:var(--ink); font-family:inherit;
+  }
+  textarea{resize:vertical; min-height:56px;}
+  .row{display:flex; gap:8px;}
+  .row > *{flex:1;}
+  button{
+    border:none; border-radius:9px; padding:11px 14px; font-size:.95rem;
+    font-weight:600; cursor:pointer;
+  }
+  .btn-main{background:var(--accent); color:#fff; width:100%; margin-top:6px;}
+  .btn-main:active{background:var(--accent-dark);}
+  .btn-secondary{background:#efe6db; color:var(--accent-dark);}
+  .btn-block{width:100%; margin-top:8px;}
+  .scan-row{display:flex; gap:8px; margin-top:4px;}
+  .scan-row input{flex:1;}
+  #scannerBox{display:none; margin-top:10px;}
+  #reader{width:100%; border-radius:10px; overflow:hidden;}
+  .candidate{
+    border:1px solid var(--line); border-radius:10px; padding:10px 12px;
+    margin-top:8px; cursor:pointer; background:#fffaf4;
+  }
+  .candidate:active{background:#f6ead9;}
+  .candidate .src{
+    display:inline-block; font-size:.7rem; font-weight:700; color:#fff;
+    background:var(--accent); border-radius:6px; padding:1px 6px; margin-bottom:4px;
+  }
+  .muted{color:var(--muted); font-size:.85rem;}
+  .status{font-size:.85rem; color:var(--muted); margin-top:8px; min-height:1.2em;}
+  .toast{
+    position:fixed; left:50%; bottom:20px; transform:translateX(-50%);
+    background:var(--ok); color:#fff; padding:10px 18px; border-radius:20px;
+    font-size:.9rem; box-shadow:0 4px 12px rgba(0,0,0,.2); opacity:0;
+    transition:opacity .25s; pointer-events:none;
+  }
+  .toast.show{opacity:1;}
+  table{width:100%; border-collapse:collapse; font-size:.85rem;}
+  th, td{text-align:left; padding:6px 4px; border-bottom:1px solid var(--line);}
+  th{color:var(--muted); font-weight:600;}
+  .linkbtn{
+    display:block; text-align:center; padding:10px; border-radius:9px;
+    background:#efe6db; color:var(--accent-dark); text-decoration:none;
+    font-weight:600; margin-top:8px; font-size:.9rem;
+  }
+  details summary{cursor:pointer; font-weight:600; color:var(--accent-dark);}
+  .warn{
+    background:#fdf1e6; border:1px solid #e9c99a; color:#7a4a12;
+    border-radius:10px; padding:10px 12px; font-size:.85rem; margin-bottom:16px;
+  }
+  .warn code{background:#fff; padding:1px 4px; border-radius:4px;}
+</style>
+</head>
+<body>
+
+<header>
+  🎵 La Gran Hemeroteca De Discos
+  <small>Versión con cámara — conectada a tu Google Sheet</small>
+</header>
+
+<main>
+
+  <!-- ============================================================
+       CONFIGURACIÓN: pega aquí tus dos enlaces antes de subir esto
+       a GitHub Pages (o edítalo luego con el editor de GitHub).
+       ============================================================ -->
+  <div class="warn" id="configWarning">
+    ⚙️ Falta configurar esta página: abre este archivo, busca
+    <code>CONFIG</code> cerca del final y pega ahí tu URL de Apps Script
+    y la de tu Google Sheet.
+  </div>
+
+  <div class="card">
+    <h2>1. Código de barras</h2>
+    <div class="scan-row">
+      <input id="barcode" inputmode="numeric" placeholder="Escribe o escanea el código">
+      <button class="btn-secondary" onclick="onScanClick()">📷</button>
+    </div>
+    <div id="scannerBox">
+      <div id="reader"></div>
+      <button class="btn-secondary btn-block" onclick="stopScan()">Cerrar cámara</button>
+    </div>
+    <button class="btn-main" onclick="doLookup()">🔍 Buscar disco</button>
+    <div class="status" id="lookupStatus"></div>
+    <div id="candidates"></div>
+    <div id="noMatch" style="display:none;" class="muted">
+      No se ha encontrado ese código.
+      <a id="discogsLink" href="#" target="_blank">Buscar a mano en Discogs</a>.
+      Puedes rellenar los datos abajo tú mismo.
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>2. Datos del disco</h2>
+    <label>Artista</label>
+    <input id="artista">
+    <label>Título</label>
+    <input id="titulo">
+    <div class="row">
+      <div>
+        <label>Año (publicación)</label>
+        <input id="anio" inputmode="numeric">
+      </div>
+      <div>
+        <label>Formato</label>
+        <input id="formato" list="formatos">
+        <datalist id="formatos">
+          <option value="Vinilo"><option value="CD"><option value="DVD">
+        </datalist>
+      </div>
+    </div>
+    <label>Discográfica</label>
+    <input id="discografica">
+
+    <h2 style="margin-top:16px;">3. Tus datos</h2>
+    <div class="row">
+      <div>
+        <label>Propiedad</label>
+        <input id="propiedad" list="propiedades">
+        <datalist id="propiedades"></datalist>
+      </div>
+      <div>
+        <label>Ubicación</label>
+        <input id="ubicacion" list="ubicaciones">
+        <datalist id="ubicaciones"></datalist>
+      </div>
+    </div>
+    <label>Lugar de compra</label>
+    <input id="lugarCompra" list="lugares">
+    <datalist id="lugares"></datalist>
+    <div class="row">
+      <div>
+        <label>Año de compra</label>
+        <input id="anioCompra" inputmode="numeric">
+      </div>
+      <div>
+        <label>Precio</label>
+        <input id="precio" placeholder="5, 12£, ?...">
+      </div>
+    </div>
+    <label>Notas</label>
+    <textarea id="notas"></textarea>
+
+    <button class="btn-main" onclick="addToCollection()">➕ Añadir a mi colección</button>
+    <div class="status" id="saveStatus"></div>
+  </div>
+
+  <div class="card">
+    <details id="collectionDetails">
+      <summary>📚 Ver mi colección</summary>
+      <div style="margin-top:10px;">
+        <input id="filterBox" placeholder="Filtrar por artista o título" oninput="renderCollection()">
+        <div class="muted" id="countText" style="margin-top:8px;"></div>
+        <div style="max-height:320px; overflow:auto; margin-top:6px;">
+          <table id="collectionTable"><tbody></tbody></table>
+        </div>
+      </div>
+    </details>
+    <a class="linkbtn" id="sheetLink" href="#" target="_blank">📊 Abrir la hoja de cálculo completa</a>
+  </div>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>
+  /* =====================================================================
+     CONFIG — pega aquí tus dos enlaces:
+     1) API_URL: la URL de "Aplicación web" que te dio Apps Script al
+        implementar (termina en /exec).
+     2) SHEET_URL: la URL de tu Google Sheet (la de siempre, la que usas
+        para abrirlo en el navegador).
+     ===================================================================== */
+  const API_URL = 'https://script.google.com/macros/s/AKfycbyP5O9N8snlVTTiH_mt-1du17znkhPnq0dyQ8lRqm1xV-NMm0v8EJsXvmmDvuez7UeNwg/exec';
+  const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1ycKwWENlVCf2Wwb8Fi5-rabLwjkzz0e36IqHKiVEQJE/edit?gid=188515281#gid=188515281';
+  /* ===================================================================== */
+
+  if (!API_URL.startsWith('http') || !SHEET_URL.startsWith('http')) {
+    document.getElementById('configWarning').style.display = 'block';
+  } else {
+    document.getElementById('configWarning').style.display = 'none';
+  }
+  document.getElementById('sheetLink').href = SHEET_URL;
+
+  let allRecords = [];
+  let html5QrCode = null;
+
+  function val(id){ return document.getElementById(id).value.trim(); }
+  function setStatus(id, msg){ document.getElementById(id).textContent = msg || ''; }
+  function toast(msg){
+    const t = document.getElementById('toast');
+    t.textContent = msg; t.classList.add('show');
+    setTimeout(()=>t.classList.remove('show'), 2200);
+  }
+
+  function getPin(){ return localStorage.getItem('ghdd_pin') || ''; }
+  function askPin(){
+    const p = prompt('Este cuaderno está protegido con un PIN. Introdúcelo:');
+    if (p !== null){ localStorage.setItem('ghdd_pin', p); }
+  }
+
+  /* ---------------- Escaneo de cámara ---------------- */
+  function onScanClick(){
+    document.getElementById('scannerBox').style.display = 'block';
+    html5QrCode = new Html5Qrcode("reader", {
+      formatsToSupport: [
+        Html5QrcodeSupportedFormats.EAN_13,
+        Html5QrcodeSupportedFormats.EAN_8,
+        Html5QrcodeSupportedFormats.UPC_A,
+        Html5QrcodeSupportedFormats.UPC_E,
+        Html5QrcodeSupportedFormats.CODE_128
+      ]
+    });
+    html5QrCode.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: { width: 260, height: 130 } },
+      (decodedText) => {
+        document.getElementById('barcode').value = decodedText;
+        stopScan();
+        doLookup();
+      },
+      () => {}
+    ).catch(err => {
+      alert('No se pudo abrir la cámara: ' + err);
+      document.getElementById('scannerBox').style.display = 'none';
+    });
+  }
+  function stopScan(){
+    if (html5QrCode){
+      html5QrCode.stop().then(()=>html5QrCode.clear()).catch(()=>{});
+    }
+    document.getElementById('scannerBox').style.display = 'none';
+  }
+
+  /* ---------------- Búsqueda del disco ---------------- */
+  async function doLookup(){
+    const code = val('barcode');
+    document.getElementById('candidates').innerHTML = '';
+    document.getElementById('noMatch').style.display = 'none';
+    if (!code){ setStatus('lookupStatus', 'Escribe o escanea un código primero.'); return; }
+    setStatus('lookupStatus', 'Buscando "' + code + '"...');
+    try{
+      const pin = getPin();
+      const url = API_URL + '?action=lookup&barcode=' + encodeURIComponent(code) +
+        (pin ? '&pin=' + encodeURIComponent(pin) : '');
+      const res = await fetch(url);
+      const data = await res.json();
+      if (!data.ok){
+        if (data.error === 'PIN incorrecto'){ askPin(); setStatus('lookupStatus',''); return; }
+        setStatus('lookupStatus', 'Error: ' + data.error); return;
+      }
+      setStatus('lookupStatus', data.candidates.length + ' resultado(s).');
+      renderCandidates(data.candidates);
+      if (data.candidates.length === 0){
+        document.getElementById('discogsLink').href =
+          'https://www.discogs.com/search/?q=' + encodeURIComponent(code) + '&type=release';
+        document.getElementById('noMatch').style.display = 'block';
+      }
+    }catch(err){
+      setStatus('lookupStatus', 'Error de conexión: ' + err);
+    }
+  }
+
+  function renderCandidates(list){
+    const box = document.getElementById('candidates');
+    box.innerHTML = '';
+    list.forEach((c) => {
+      const div = document.createElement('div');
+      div.className = 'candidate';
+      div.onclick = () => fillForm(c);
+      div.innerHTML = '<span class="src">' + c.fuente + '</span><br>' +
+        '<strong>' + escapeHtml(c.artista) + '</strong> — ' + escapeHtml(c.titulo) + '<br>' +
+        '<span class="muted">' + escapeHtml(c.anio||'') + ' · ' + escapeHtml(c.formato||'') +
+        ' · ' + escapeHtml(c.discografica||'') + '</span>';
+      box.appendChild(div);
+    });
+  }
+
+  function fillForm(c){
+    document.getElementById('artista').value = c.artista || '';
+    document.getElementById('titulo').value = c.titulo || '';
+    document.getElementById('anio').value = c.anio || '';
+    document.getElementById('formato').value = c.formato || '';
+    document.getElementById('discografica').value = c.discografica || '';
+    document.getElementById('artista').scrollIntoView({behavior:'smooth', block:'center'});
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+
+  /* ---------------- Guardar en la hoja ---------------- */
+  async function addToCollection(){
+    const record = {
+      artista: val('artista'), titulo: val('titulo'), anio: val('anio'),
+      formato: val('formato'), discografica: val('discografica'),
+      propiedad: val('propiedad'), ubicacion: val('ubicacion'),
+      lugarCompra: val('lugarCompra'), anioCompra: val('anioCompra'),
+      precio: val('precio'), notas: val('notas')
+    };
+    if (!record.artista || !record.titulo){
+      setStatus('saveStatus', 'Pon al menos artista y título.'); return;
+    }
+    setStatus('saveStatus', 'Guardando...');
+    try{
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'add', record: record, pin: getPin() })
+      });
+      const data = await res.json();
+      if (!data.ok){
+        if (data.error === 'PIN incorrecto'){ askPin(); setStatus('saveStatus',''); return; }
+        setStatus('saveStatus', 'Error: ' + data.error); return;
+      }
+      toast('✅ Añadido a tu colección');
+      setStatus('saveStatus', '');
+      ['barcode','artista','titulo','anio','formato','discografica','notas'].forEach(id => {
+        document.getElementById(id).value = '';
+      });
+      document.getElementById('candidates').innerHTML = '';
+      document.getElementById('noMatch').style.display = 'none';
+      document.getElementById('barcode').focus();
+      allRecords.push(record);
+      refreshDatalists();
+    }catch(err){
+      setStatus('saveStatus', 'Error de conexión: ' + err);
+    }
+  }
+
+  /* ---------------- Colección / listado ---------------- */
+  async function loadCollection(){
+    try{
+      const pin = getPin();
+      const url = API_URL + '?action=list' + (pin ? '&pin=' + encodeURIComponent(pin) : '');
+      const res = await fetch(url);
+      const data = await res.json();
+      if (!data.ok) return;
+      allRecords = data.records || [];
+      refreshDatalists();
+      renderCollection();
+    }catch(err){ /* silencioso: se reintenta al abrir "ver colección" */ }
+  }
+
+  function refreshDatalists(){
+    const uniq = (key) => [...new Set(allRecords.map(r => (r[key]||'').toString().trim()).filter(Boolean))].sort();
+    fillDatalist('propiedades', uniq('Propiedad'));
+    fillDatalist('ubicaciones', uniq('Ubicación'));
+    fillDatalist('lugares', uniq('Lugar de Compra'));
+  }
+  function fillDatalist(id, values){
+    const dl = document.getElementById(id);
+    dl.innerHTML = values.map(v => '<option value="'+escapeHtml(v)+'">').join('');
+  }
+
+  function renderCollection(){
+    const filter = val('filterBox').toLowerCase();
+    const filtered = allRecords.filter(r => {
+      if (!filter) return true;
+      const a = (r.Artista||'').toString().toLowerCase();
+      const t = (r['Título']||'').toString().toLowerCase();
+      return a.includes(filter) || t.includes(filter);
+    });
+    document.getElementById('countText').textContent =
+      filtered.length + ' de ' + allRecords.length + ' discos';
+    const tbody = document.querySelector('#collectionTable tbody');
+    tbody.innerHTML = filtered.slice(0, 200).map(r =>
+      '<tr><td><strong>'+escapeHtml(r.Artista||'')+'</strong><br>'+escapeHtml(r['Título']||'')+
+      '</td><td class="muted">'+escapeHtml(r['Año']||'')+'<br>'+escapeHtml(r['Formato']||'')+'</td></tr>'
+    ).join('');
+  }
+
+  document.getElementById('collectionDetails').addEventListener('toggle', function(){
+    if (this.open && allRecords.length === 0) loadCollection();
+  });
+
+  if (API_URL.startsWith('http')) loadCollection();
+</script>
+</body>
+</html>
